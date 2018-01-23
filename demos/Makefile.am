@@ -3,6 +3,7 @@ noinst_PROGRAMS = minimal launcher animated-marker polygons url-marker create-de
 SUBDIRS = icons
 
 AM_CPPFLAGS = $(DEPS_CFLAGS) $(WARN_CFLAGS) -I$(top_srcdir)
+AM_LDFLAGS = -lm
 
 minimal_SOURCES = minimal.c
 minimal_LDADD = $(DEPS_LIBS) ../champlain/libchamplain-@CHAMPLAIN_API_VERSION@.la

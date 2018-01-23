@@ -353,7 +353,7 @@ main (int argc,
 
   g_object_set (G_OBJECT (view),
       "kinetic-mode", TRUE,
-      "zoom-level", 5,
+      "zoom-level", 18,
       NULL);
 
   g_object_set_data (G_OBJECT (view), "window", window);
@@ -371,7 +371,7 @@ main (int argc,
   license_actor = champlain_view_get_license_actor (view);
   champlain_license_set_extra_text (license_actor, "Don't eat cereals with orange juice\nIt tastes bad");
   
-  champlain_view_center_on (CHAMPLAIN_VIEW (view), 45.466, -73.75);
+  champlain_view_center_on (CHAMPLAIN_VIEW (view), 22.5798001609, 113.926382077);
 
   layer = create_marker_layer (view, &path);
   champlain_view_add_layer (view, CHAMPLAIN_LAYER (path));
