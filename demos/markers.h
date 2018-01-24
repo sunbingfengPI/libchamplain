@@ -23,4 +23,7 @@
 
 ChamplainMarkerLayer *create_marker_layer (ChamplainView *view, ChamplainPathLayer **path);
 
+int move_car(double lat, double lon);
+int rotate_car(double toangle);
+
 #endif

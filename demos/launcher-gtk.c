@@ -23,6 +23,10 @@
 #include <clutter-gtk/clutter-gtk.h>
 
 #include <markers.h>
+#include <nanomsg/nn.h>
+#include <nanomsg/pubsub.h>
+
+#include "chassis_com.h"
 
 #define N_COLS 2
 #define COL_ID 0
@@ -31,6 +35,91 @@
 static ChamplainPathLayer *path_layer;
 static ChamplainPathLayer *path;
 static gboolean destroying = FALSE;
+
+static GtkWidget *chassisURLentry;
+static GtkEntryBuffer *entryBuffer;
+
+static int chassis_fd = -1;
+
+static gboolean on_listen = FALSE;
+static GThread * listen_thread;
+
+static void chassis_pos_update()
+{
+  int rc;
+
+  chassis_pos pos;
+  for (;on_listen;) {
+      uint8_t msg[sizeof (chassis_pos)];
+
+      rc = nn_recv (chassis_fd, msg, sizeof (msg), 0);
+      if (rc < 0) {
+          fprintf (stderr, "nn_recv: %s\n", nn_strerror (nn_errno ()));
+          break;
+      }
+      if (rc != sizeof (msg)) {
+          fprintf (stderr, "nn_recv: got %d bytes, wanted %d\n",
+              rc, (int)sizeof (msg));
+           break;
+      }
+      memcpy (&pos, msg, sizeof (chassis_pos));
+      move_car(pos.lat, pos.lon);
+      rotate_car(pos.heading);
+
+      printf ("latest position reached, lat: %f, lon: %f, heading: %f\n", pos.lat, pos.lon, pos.heading);
+  }
+
+  printf("thread exit\n");
+}
+
+/*  The client runs in a loop, displaying the content. */
+static int 
+subscribeToChassis(const char *url)
+{
+    int fd;
+    int rc;
+
+    fd = nn_socket (AF_SP, NN_SUB);
+    if (fd < 0) {
+        fprintf (stderr, "nn_socket: %s\n", nn_strerror (nn_errno ()));
+        return (-1);
+    }
+
+    if (nn_connect (fd, url) < 0) {
+        fprintf (stderr, "nn_socket: %s\n", nn_strerror (nn_errno ()));
+        nn_close (fd);
+        return (-1);        
+    }
+
+    /*  We want all messages, so just subscribe to the empty value. */
+    if (nn_setsockopt (fd, NN_SUB, NN_SUB_SUBSCRIBE, "", 0) < 0) {
+        fprintf (stderr, "nn_setsockopt: %s\n", nn_strerror (nn_errno ()));
+        nn_close (fd);
+        return (-1);        
+    }
+
+    on_listen = TRUE;
+    listen_thread = g_thread_new("sub_chassis", &chassis_pos_update, NULL);
+    chassis_fd = fd;
+
+    return (0);
+}
+
+static int 
+unsubscribeToChassis()
+{
+  g_thread_unref(listen_thread);
+  on_listen = FALSE;
+
+  if(chassis_fd > 0)
+  {
+    nn_close (chassis_fd);
+  }
+
+  chassis_fd = -1;
+
+  return 0;
+}
 
 /*
  * Terminate the main loop.
@@ -160,13 +249,37 @@ zoom_out (GtkWidget *widget,
 
 
 static void
-toggle_wrap (GtkWidget *widget,
+connect_ctrl (GtkWidget *widget,
     ChamplainView *view)
 {
- gboolean wrap;
+  gboolean active = gtk_toggle_button_get_active(widget);
+  unsigned char url[50];
+  // gtk_toggle_button_set_active(widget, active);
 
-  wrap = champlain_view_get_horizontal_wrap (view);
-  champlain_view_set_horizontal_wrap (view, !wrap);
+  if(active)
+  {
+    strcpy(url, "tcp://");
+    strcat(url, gtk_entry_get_text(chassisURLentry));
+    strcat(url, ":5555");
+
+    fprintf(stderr, "%s\n", url);
+    if(subscribeToChassis(url) == 0)
+    {
+      // successed
+      // GTK_ENTRY (chassisURLentry)->editable = FALSE;
+      // 
+      // state change
+      gtk_button_set_label(widget, "unconnect");    
+    }
+  }
+  else
+  {
+    if(unsubscribeToChassis() == 0)
+    {
+      // GTK_ENTRY (chassisURLentry)->editable = TRUE;
+      gtk_button_set_label(widget, "connect");
+    }
+  }
 }
 
 
@@ -313,12 +426,13 @@ add_clicked (GtkButton     *button,
 }
 
 
+
 int
 main (int argc,
     char *argv[])
 {
   GtkWidget *window;
-  GtkWidget *widget, *vbox, *bbox, *button, *viewport, *image;
+  GtkWidget *widget, *vbox, *bbox, *button, *entry, *viewport, *image;
   ChamplainView *view;
   ChamplainMarkerLayer *layer;
   ClutterActor *scale;
@@ -412,16 +526,15 @@ main (int argc,
   g_signal_connect (button, "toggled", G_CALLBACK (toggle_layer), layer);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
-  button = gtk_toggle_button_new_with_label ("Toggle wrap");
+  entryBuffer = gtk_entry_buffer_new(NULL, -1);
+  chassisURLentry = gtk_entry_new_with_buffer(entryBuffer);
+  gtk_entry_set_text(chassisURLentry, "192.168.8.104");
+  gtk_container_add(GTK_CONTAINER (bbox), chassisURLentry);
+
+  button = gtk_toggle_button_new_with_label ("connect");
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button),
                                 champlain_view_get_horizontal_wrap (view));
-  g_signal_connect (button, "toggled", G_CALLBACK (toggle_wrap), view);
-  gtk_container_add (GTK_CONTAINER (bbox), button);
-
-  button = gtk_combo_box_new ();
-  build_combo_box (GTK_COMBO_BOX (button));
-  gtk_combo_box_set_active (GTK_COMBO_BOX (button), 0);
-  g_signal_connect (button, "changed", G_CALLBACK (map_source_changed), view);
+  g_signal_connect (button, "toggled", G_CALLBACK (connect_ctrl), view);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
   button = gtk_spin_button_new_with_range (0, 20, 1);
@@ -461,6 +574,7 @@ main (int argc,
 
   /* make sure that everything, window and label, are visible */
   gtk_widget_show_all (window);
+
   /* start the main loop */
   gtk_main ();
 
