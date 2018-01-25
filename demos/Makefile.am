@@ -32,7 +32,7 @@ minimal_gtk_LDADD = $(GTK_LIBS) $(DEPS_LIBS) \
 		../champlain/libchamplain-@CHAMPLAIN_API_VERSION@.la
 
 noinst_PROGRAMS += launcher-gtk
-launcher_gtk_SOURCES = launcher-gtk.c markers.c
+launcher_gtk_SOURCES = launcher-gtk.c markers.c chassis_adaptor.c
 launcher_gtk_CPPFLAGS = $(GTK_CFLAGS) $(WARN_CFLAGS) -I$(top_srcdir)
 launcher_gtk_LDADD = $(GTK_LIBS) $(DEPS_LIBS) \
 		../champlain-gtk/libchamplain-gtk-@CHAMPLAIN_API_VERSION@.la \

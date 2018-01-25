@@ -23,10 +23,8 @@
 #include <clutter-gtk/clutter-gtk.h>
 
 #include <markers.h>
-#include <nanomsg/nn.h>
-#include <nanomsg/pubsub.h>
-
 #include "chassis_com.h"
+#include "chassis_adaptor.h"
 
 #define N_COLS 2
 #define COL_ID 0
@@ -39,86 +37,15 @@ static gboolean destroying = FALSE;
 static GtkWidget *chassisURLentry;
 static GtkEntryBuffer *entryBuffer;
 
-static int chassis_fd = -1;
+PIChassisAdaptor *adp;
 
-static gboolean on_listen = FALSE;
-static GThread * listen_thread;
-
-static void chassis_pos_update()
+static void chassis_update(PIChassisAdaptor *chassis_adp, int dummy)
 {
-  int rc;
+  printf("chassis updated!\n");
 
-  chassis_pos pos;
-  for (;on_listen;) {
-      uint8_t msg[sizeof (chassis_pos)];
-
-      rc = nn_recv (chassis_fd, msg, sizeof (msg), 0);
-      if (rc < 0) {
-          fprintf (stderr, "nn_recv: %s\n", nn_strerror (nn_errno ()));
-          break;
-      }
-      if (rc != sizeof (msg)) {
-          fprintf (stderr, "nn_recv: got %d bytes, wanted %d\n",
-              rc, (int)sizeof (msg));
-           break;
-      }
-      memcpy (&pos, msg, sizeof (chassis_pos));
-      move_car(pos.lat, pos.lon);
-      rotate_car(pos.heading);
-
-      printf ("latest position reached, lat: %f, lon: %f, heading: %f\n", pos.lat, pos.lon, pos.heading);
-  }
-
-  printf("thread exit\n");
-}
-
-/*  The client runs in a loop, displaying the content. */
-static int 
-subscribeToChassis(const char *url)
-{
-    int fd;
-    int rc;
-
-    fd = nn_socket (AF_SP, NN_SUB);
-    if (fd < 0) {
-        fprintf (stderr, "nn_socket: %s\n", nn_strerror (nn_errno ()));
-        return (-1);
-    }
-
-    if (nn_connect (fd, url) < 0) {
-        fprintf (stderr, "nn_socket: %s\n", nn_strerror (nn_errno ()));
-        nn_close (fd);
-        return (-1);        
-    }
-
-    /*  We want all messages, so just subscribe to the empty value. */
-    if (nn_setsockopt (fd, NN_SUB, NN_SUB_SUBSCRIBE, "", 0) < 0) {
-        fprintf (stderr, "nn_setsockopt: %s\n", nn_strerror (nn_errno ()));
-        nn_close (fd);
-        return (-1);        
-    }
-
-    on_listen = TRUE;
-    listen_thread = g_thread_new("sub_chassis", &chassis_pos_update, NULL);
-    chassis_fd = fd;
-
-    return (0);
-}
-
-static int 
-unsubscribeToChassis()
-{
-  g_thread_unref(listen_thread);
-  on_listen = FALSE;
-
-  if(chassis_fd > 0)
-  {
-    nn_close (chassis_fd);
-  }
-
-  chassis_fd = -1;
-
-  return 0;
+  chassis_pos pos = pi_chassis_adaptor_get_pos(chassis_adp);
+  move_car(pos.lat, pos.lon);
+  rotate_car(pos.heading);
 }
 
 /*
@@ -130,7 +57,6 @@ on_destroy (GtkWidget *widget, gpointer data)
   destroying = TRUE;
   gtk_main_quit ();
 }
-
 
 static void
 toggle_layer (GtkToggleButton *widget,
@@ -263,7 +189,7 @@ connect_ctrl (GtkWidget *widget,
     strcat(url, ":5555");
 
     fprintf(stderr, "%s\n", url);
-    if(subscribeToChassis(url) == 0)
+    if(pi_chassis_adaptor_subscribe(adp, url) == 0)
     {
       // successed
       // GTK_ENTRY (chassisURLentry)->editable = FALSE;
@@ -274,7 +200,7 @@ connect_ctrl (GtkWidget *widget,
   }
   else
   {
-    if(unsubscribeToChassis() == 0)
+    if(pi_chassis_adaptor_unsubscribe(adp) == 0)
     {
       // GTK_ENTRY (chassisURLentry)->editable = TRUE;
       gtk_button_set_label(widget, "connect");
@@ -568,6 +494,9 @@ main (int argc,
 
   gtk_box_pack_start (GTK_BOX (vbox), bbox, FALSE, FALSE, 0);
   gtk_container_add (GTK_CONTAINER (vbox), viewport);
+
+  adp = pi_chassis_adaptor_new();
+  g_signal_connect(adp, "updated", G_CALLBACK (chassis_update), 0);
 
   /* and insert it into the main window  */
   gtk_container_add (GTK_CONTAINER (window), vbox);
