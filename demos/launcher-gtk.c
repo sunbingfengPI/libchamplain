@@ -30,6 +30,8 @@
 #define COL_ID 0
 #define COL_NAME 1
 
+extern ClutterActor *target_marker;
+
 static ChamplainPathLayer *path_layer;
 static ChamplainPathLayer *path;
 static gboolean destroying = FALSE;
@@ -298,57 +300,16 @@ export_png (GtkButton     *button,
 
 
 static void
-add_clicked (GtkButton     *button,
+goto_target (GtkButton     *button,
              ChamplainView *view)
 {
-  GtkWidget *window, *dialog, *vbox, *combo;
-  GtkResponseType response;
+  gdouble t_lat, t_lon;
 
-  window = g_object_get_data (G_OBJECT (view), "window");
-  dialog = gtk_dialog_new_with_buttons ("Add secondary map source",
-                                        GTK_WINDOW (window),
-                                        GTK_DIALOG_MODAL,
-                                        "Add",
-                                        GTK_RESPONSE_OK,
-                                        "Cancel",
-                                        GTK_RESPONSE_CANCEL,
-                                        NULL);
+  t_lat = champlain_location_get_latitude (CHAMPLAIN_LOCATION (target_marker));
+  t_lon = champlain_location_get_longitude (CHAMPLAIN_LOCATION (target_marker));
 
-  combo = gtk_combo_box_new ();
-  build_combo_box (GTK_COMBO_BOX (combo));
-  gtk_combo_box_set_active (GTK_COMBO_BOX (combo), 0);
-
-  vbox = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
-  gtk_container_add (GTK_CONTAINER (vbox), combo);
-
-  gtk_widget_show_all (dialog);
-
-  response = gtk_dialog_run (GTK_DIALOG (dialog));
-
-  if (response == GTK_RESPONSE_OK)
-    {
-      GtkTreeModel *model;
-      GtkTreeIter iter;
-      ChamplainMapSource *source;
-      ChamplainMapSourceFactory *factory;
-      char *id;
-
-      if (!gtk_combo_box_get_active_iter (GTK_COMBO_BOX (combo), &iter))
-        return;
-
-      model = gtk_combo_box_get_model (GTK_COMBO_BOX (combo));
-
-      gtk_tree_model_get (model, &iter, COL_ID, &id, -1);
-
-      factory = champlain_map_source_factory_dup_default ();
-      source = champlain_map_source_factory_create_memcached_source (factory, id);
-
-      champlain_view_add_overlay_source (view, source, 0.6 * 255);
-      g_object_unref (factory);
-      g_free (id);
-    }
-
-  gtk_widget_destroy (dialog);
+  chassis_pos pos = (chassis_pos){.lat=t_lat, .lon=t_lon, .heading=0};
+  pi_chassis_adaptor_set_target(adp, pos);
 }
 
 
@@ -463,18 +424,18 @@ main (int argc,
   g_signal_connect (button, "toggled", G_CALLBACK (connect_ctrl), view);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
+  button = gtk_button_new ();
+  image = gtk_image_new_from_icon_name ("go-last", GTK_ICON_SIZE_BUTTON);
+  gtk_button_set_image (GTK_BUTTON (button), image);
+  g_signal_connect (button, "clicked", G_CALLBACK (goto_target), view);
+  gtk_container_add (GTK_CONTAINER (bbox), button);
+
   button = gtk_spin_button_new_with_range (0, 20, 1);
   gtk_spin_button_set_value (GTK_SPIN_BUTTON (button),
       champlain_view_get_zoom_level (view));
   g_signal_connect (button, "changed", G_CALLBACK (zoom_changed), view);
   g_signal_connect (view, "notify::zoom-level", G_CALLBACK (map_zoom_changed),
       button);
-  gtk_container_add (GTK_CONTAINER (bbox), button);
-
-  button = gtk_button_new ();
-  image = gtk_image_new_from_icon_name ("list-add", GTK_ICON_SIZE_BUTTON);
-  gtk_button_set_image (GTK_BUTTON (button), image);
-  g_signal_connect (button, "clicked", G_CALLBACK (add_clicked), view);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
   button = gtk_button_new ();

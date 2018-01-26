@@ -1,4 +1,5 @@
 #include "chassis_adaptor.h"
+#include <unistd.h>
 #include <champlain/champlain.h>
 #include <nanomsg/nn.h>
 #include <nanomsg/pair.h>
@@ -88,16 +89,24 @@ PIChassisAdaptor* pi_chassis_adaptor_new (void)
 
 void pi_chassis_adaptor_set_target (PIChassisAdaptor *self, chassis_pos target)
 {
-  uint8_t msg[sizeof (chassis_pos)];
-  int rc;
+  pi_system_command cmd;
+  uint8_t msg[sizeof (pi_system_command)];
+  int rc, retry = 3;
 
   PIChassisAdaptorPrivate *priv = CHASSIS_ADAPTOR_GET_PRIVATE(self);
   if(priv->connected)
   {
-    // only allowed connected.
-    memcpy (msg, &target, sizeof (chassis_pos));
+    // only allowed when connected.
+    cmd.type = PI_COMMAND_SET_TARGET;
+    memcpy(cmd.body, &target, sizeof(chassis_pos));
+    memcpy (msg, &cmd, sizeof (pi_system_command));
+    rc = nn_send (chassis_fd, msg, sizeof (msg), NN_DONTWAIT);   
 
-    rc = nn_send (chassis_fd, msg, sizeof (msg), 0);    
+    while(rc == EAGAIN && retry-- > 0) 
+    {
+      usleep(1000);
+      rc = nn_send (chassis_fd, msg, sizeof (msg), NN_DONTWAIT); 
+    }
   }
 }
 

@@ -26,7 +26,7 @@ typedef struct window_size_
   double height;
 }window_size;
 
-static ClutterActor *target_marker;
+ClutterActor *target_marker;
 static ClutterActor *current_marker;
 static ChamplainView *mainView;
 
