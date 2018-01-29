@@ -27,6 +27,9 @@ struct _PIChassisAdaptorPrivate
 {
   gboolean connected;
   chassis_pos latest_pos;
+
+  int path_len;
+  gps_2d *path;
 };
 
 static void
@@ -42,7 +45,7 @@ pi_chassis_adaptor_class_init (PIChassisAdaptorClass *class)
       G_STRUCT_OFFSET (PIChassisAdaptorClass, updated),
       NULL, NULL,
       NULL,
-      G_TYPE_NONE, 0);
+      G_TYPE_NONE, 1, G_TYPE_INT);
 }
 
 static void
@@ -61,6 +64,9 @@ pi_chassis_adaptor_init (PIChassisAdaptor *self)
       priv->latest_pos.lat = 23.0;
       priv->latest_pos.lon = 112.0;
       priv->latest_pos.heading = 20;
+
+      priv->path_len = 0;
+      priv->path = NULL;
   }  
 }
 
@@ -73,6 +79,11 @@ pi_chassis_adaptor_dispose(GObject *object)
     if(priv != NULL)
     {
         /* Deallocate contents of the private data, if any */
+        if(priv->path)
+        {
+          free(priv->path);
+        }
+
         /* Deallocate private data structure */
         g_free(priv);
         /* And finally set the opaque pointer back to NULL, so that
@@ -129,31 +140,102 @@ static void pi_chassis_adaptor_set_pos (PIChassisAdaptor *self, chassis_pos pos)
   priv->latest_pos.heading = pos.heading;
 }
 
+gboolean pi_chassis_adaptor_get_path(PIChassisAdaptor *self, gps_2d **path, int *len)
+{
+  if(!path || !len)
+  {
+    return FALSE;
+  }
+
+  PIChassisAdaptorPrivate *priv = CHASSIS_ADAPTOR_GET_PRIVATE(self);
+  *path = priv->path;
+  *len = priv->path_len;
+
+  return TRUE;
+}
+
+static void pi_chassis_adaptor_set_path(PIChassisAdaptor *self, gps_2d *nodes, int size)
+{
+  PIChassisAdaptorPrivate *priv = CHASSIS_ADAPTOR_GET_PRIVATE(self);
+
+  if(!priv->path)
+  {
+    priv->path = (gps_2d *)malloc(size * sizeof(gps_2d));
+  }
+  else
+  {
+    priv->path = (gps_2d *)realloc(priv->path, size * sizeof(gps_2d));
+  }
+
+  memcpy((void *)priv->path, (void *)nodes, size * sizeof(gps_2d));
+  priv->path_len = size;
+}
+
+static gboolean pi_chassis_adaptor_recv_check(pi_chassis_status_common *pcom, int r_size)
+{
+  int true_size = 0;
+  gboolean ret = FALSE;
+
+  switch(pcom->type)
+  {
+    case PI_CHASSIS_STATUS_TYPE_POS:
+      true_size = sizeof(pi_chassis_status_common) - sizeof(void *) + sizeof(chassis_pos);
+      ret = (true_size == r_size);
+
+      printf("expected: %d, recv: %d\n", true_size, r_size);
+      break;
+    case PI_CHASSIS_STATUS_TYPE_PATH:
+      true_size = sizeof(pi_chassis_status_common) - sizeof(void *) + pcom->length * sizeof(gps_2d);
+      ret = (true_size == r_size);
+
+      break;
+    default:
+      break;
+  }
+
+  return ret;
+}
+
+static void pi_chassis_adaptor_recv_handle(int type, int len, void * data)
+{
+
+}
+
 static void 
-pi_chassis_adaptor_update(PIChassisAdaptor *self)
+pi_chassis_adaptor_listen(PIChassisAdaptor *self)
 {
   int rc;
 
-  chassis_pos pos;
   for (;on_listen;) {
-      uint8_t msg[sizeof (chassis_pos)];
+      uint8_t *buf = NULL;
 
-      rc = nn_recv (chassis_fd, msg, sizeof (msg), 0);
-      if (rc < 0) {
-          fprintf (stderr, "nn_recv: %s\n", nn_strerror (nn_errno ()));
-          break;
+      rc = nn_recv (chassis_fd, &buf, NN_MSG, 0);
+      if (rc > 0) {
+        pi_chassis_status_common st_common;
+        memcpy(&st_common, buf, sizeof(pi_chassis_status_common));
+
+        if(!pi_chassis_adaptor_recv_check(&st_common, rc))
+        {
+          // recv frame wrong, abort!
+          continue;
+        }
+
+        printf("type: %d\n", st_common.type);
+        switch(st_common.type)
+        {
+          case PI_CHASSIS_STATUS_TYPE_POS:
+            pi_chassis_adaptor_set_pos(self, *((chassis_pos *)(buf + offsetof(pi_chassis_status_common, data))));          
+            break;
+          case PI_CHASSIS_STATUS_TYPE_PATH:
+            pi_chassis_adaptor_set_path(self, (chassis_pos *)(buf + offsetof(pi_chassis_status_common, data)), st_common.length);
+            break;
+          default:
+            break;
+        }
+        
+        g_signal_emit (self, chassis_adaptor_signals[UPDATED], 0, st_common.type);   
+        nn_freemsg(buf);
       }
-      if (rc != sizeof (msg)) {
-          fprintf (stderr, "nn_recv: got %d bytes, wanted %d\n",
-              rc, (int)sizeof (msg));
-           break;
-      }
-      memcpy (&pos, msg, sizeof (chassis_pos));
-      pi_chassis_adaptor_set_pos(self, pos);
-
-      g_signal_emit (self, chassis_adaptor_signals[UPDATED], 0);
-
-      printf ("latest position reached, lat: %f, lon: %f, heading: %f\n", pos.lat, pos.lon, pos.heading);
   }
 
   printf("thread exit\n");
@@ -179,7 +261,7 @@ pi_chassis_adaptor_subscribe(PIChassisAdaptor *self, const char *url)
     }
 
     on_listen = TRUE;
-    listen_thread = g_thread_new("sub_chassis", &pi_chassis_adaptor_update, self);
+    listen_thread = g_thread_new("sub_chassis", &pi_chassis_adaptor_listen, self);
     chassis_fd = fd;
 
     PIChassisAdaptorPrivate *priv = CHASSIS_ADAPTOR_GET_PRIVATE(self);

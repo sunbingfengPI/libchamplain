@@ -24,13 +24,16 @@ struct _PIChassisAdaptorClass
 {
 	GObjectClass parent_class;
 
-	void (* updated) (PIChassisAdaptor *self);
+	void (* updated) (PIChassisAdaptor *self, int type);
+	// void (* path_updated) (PIChassisAdaptor *self);
 };
 
 GType pi_chassis_adaptor_get_type (void) G_GNUC_CONST;
 
 PIChassisAdaptor* pi_chassis_adaptor_new (void);
 chassis_pos pi_chassis_adaptor_get_pos (PIChassisAdaptor *self);
+gboolean pi_chassis_adaptor_get_path(PIChassisAdaptor *self, gps_2d **path, int *len);
+
 void pi_chassis_adaptor_set_target (PIChassisAdaptor *self, chassis_pos target);
 
 int pi_chassis_adaptor_subscribe(PIChassisAdaptor *self, const char *url);

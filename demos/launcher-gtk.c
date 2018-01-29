@@ -32,7 +32,7 @@
 
 extern ClutterActor *target_marker;
 
-static ChamplainPathLayer *path_layer;
+static ChamplainPathLayer *path_layer = NULL;
 static ChamplainPathLayer *path;
 static gboolean destroying = FALSE;
 
@@ -41,13 +41,63 @@ static GtkEntryBuffer *entryBuffer;
 
 PIChassisAdaptor *adp;
 
-static void chassis_update(PIChassisAdaptor *chassis_adp, int dummy)
+static void
+append_point (ChamplainPathLayer *layer, gdouble lon, gdouble lat)
 {
-  printf("chassis updated!\n");
+  ChamplainCoordinate *coord;  
+  
+  coord = champlain_coordinate_new_full (lat, lon);
+  champlain_path_layer_add_node (layer, CHAMPLAIN_LOCATION (coord));
+}
 
-  chassis_pos pos = pi_chassis_adaptor_get_pos(chassis_adp);
-  move_car(pos.lat, pos.lon);
-  rotate_car(pos.heading);
+static void update_path(ChamplainView *view, gps_2d *nodes, int size)
+{
+  int i = 0;
+  if(!path_layer)
+  {
+    printf("first create path layer\n");
+  }
+  else
+  {
+    printf("update path layer\n");
+    champlain_path_layer_remove_all(path_layer);
+  }
+
+  for(i = 0; i < size; i++)
+  {
+    append_point (path_layer, nodes[i].lon, nodes[i].lat);
+  }
+}
+
+static void chassis_update(PIChassisAdaptor *chassis_adp, int type, ChamplainView *view)
+{
+  printf("chassis updated! type: %d\n", type);
+  chassis_pos pos, *path;
+  int len = 0;
+  switch(type)
+  {
+    case PI_CHASSIS_STATUS_TYPE_POS:
+      {
+        pos = pi_chassis_adaptor_get_pos(chassis_adp);
+        move_car(pos.lat, pos.lon);
+        rotate_car(pos.heading);   
+
+        break;       
+      }
+    case PI_CHASSIS_STATUS_TYPE_PATH:
+      {
+        if(pi_chassis_adaptor_get_path(chassis_adp, &path, &len))
+        {
+          printf("len: %d\n", len);
+          update_path(view, path, len);
+        }
+
+        break;
+      }
+    default:
+      break;
+  }
+  
 }
 
 /*
@@ -182,7 +232,8 @@ connect_ctrl (GtkWidget *widget,
 {
   gboolean active = gtk_toggle_button_get_active(widget);
   unsigned char url[50];
-  // gtk_toggle_button_set_active(widget, active);
+  GValue val = G_VALUE_INIT;
+  g_value_init(&val, G_TYPE_BOOLEAN);
 
   if(active)
   {
@@ -195,6 +246,8 @@ connect_ctrl (GtkWidget *widget,
     {
       // successed
       // GTK_ENTRY (chassisURLentry)->editable = FALSE;
+      g_value_set_boolean(&val, FALSE);
+      g_object_set_property(G_OBJECT (chassisURLentry), "editable", &val);
       // 
       // state change
       gtk_button_set_label(widget, "unconnect");    
@@ -205,9 +258,13 @@ connect_ctrl (GtkWidget *widget,
     if(pi_chassis_adaptor_unsubscribe(adp) == 0)
     {
       // GTK_ENTRY (chassisURLentry)->editable = TRUE;
+      g_value_set_boolean(&val, TRUE);
+      g_object_set_property(G_OBJECT (chassisURLentry), "editable", &val);
       gtk_button_set_label(widget, "connect");
     }
   }
+
+  g_value_unset (&val);
 }
 
 
@@ -250,16 +307,6 @@ build_combo_box (GtkComboBox *box)
   gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (box), cell, FALSE);
   gtk_cell_layout_set_attributes (GTK_CELL_LAYOUT (box), cell,
       "text", COL_NAME, NULL);
-}
-
-
-static void
-append_point (ChamplainPathLayer *layer, gdouble lon, gdouble lat)
-{
-  ChamplainCoordinate *coord;  
-  
-  coord = champlain_coordinate_new_full (lon, lat);
-  champlain_path_layer_add_node (layer, CHAMPLAIN_LOCATION (coord));
 }
 
 
@@ -312,8 +359,6 @@ goto_target (GtkButton     *button,
   pi_chassis_adaptor_set_target(adp, pos);
 }
 
-
-
 int
 main (int argc,
     char *argv[])
@@ -351,7 +396,6 @@ main (int argc,
   clutter_actor_set_reactive (CLUTTER_ACTOR (view), TRUE);
   g_signal_connect (view, "button-release-event", G_CALLBACK (mouse_click_cb), view);
 
-
   g_object_set (G_OBJECT (view),
       "kinetic-mode", TRUE,
       "zoom-level", 18,
@@ -377,19 +421,9 @@ main (int argc,
   layer = create_marker_layer (view, &path);
   champlain_view_add_layer (view, CHAMPLAIN_LAYER (path));
   champlain_view_add_layer (view, CHAMPLAIN_LAYER (layer));
-  
+
   path_layer = champlain_path_layer_new ();
-  /* Cheap approx of Highway 10 */
-  append_point (path_layer, 45.4095, -73.3197);
-  append_point (path_layer, 45.4104, -73.2846);
-  append_point (path_layer, 45.4178, -73.2239);
-  append_point (path_layer, 45.4176, -73.2181);
-  append_point (path_layer, 45.4151, -73.2126);
-  append_point (path_layer, 45.4016, -73.1926);
-  append_point (path_layer, 45.3994, -73.1877);
-  append_point (path_layer, 45.4000, -73.1815);
-  append_point (path_layer, 45.4151, -73.1218);
-  champlain_view_add_layer (view, CHAMPLAIN_LAYER (path_layer));
+  champlain_view_add_layer (view, CHAMPLAIN_LAYER (path_layer));  
 
   gtk_widget_set_size_request (widget, 640, 481);
 
@@ -457,7 +491,7 @@ main (int argc,
   gtk_container_add (GTK_CONTAINER (vbox), viewport);
 
   adp = pi_chassis_adaptor_new();
-  g_signal_connect(adp, "updated", G_CALLBACK (chassis_update), 0);
+  g_signal_connect(adp, "updated", G_CALLBACK (chassis_update), view);
 
   /* and insert it into the main window  */
   gtk_container_add (GTK_CONTAINER (window), vbox);
