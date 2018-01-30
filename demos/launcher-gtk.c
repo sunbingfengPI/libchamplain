@@ -371,12 +371,19 @@ main (int argc,
     char *argv[])
 {
   GtkWidget *window;
-  GtkWidget *widget, *vbox, *bbox, *button, *entry, *viewport, *image;
+  GtkWidget *widget, *hbox, *vbox, *vbox_clutter, *bbox, *button, *entry, *viewport, *image;
+  GtkWidget *clutter_widget;
   ChamplainView *view;
   ChamplainMarkerLayer *layer;
   ClutterActor *scale;
   ChamplainLicense *license_actor;
   GList *dash = NULL;
+
+  ClutterColor stage_color = { 0x00, 0x00, 0x00, 0xff }; /* Black */
+  ClutterColor actor_color = { 0xff, 0xff, 0xff, 0x99 };
+  ClutterActor *stage;
+  ClutterActor *label;
+  float x, y;
 
   if (gtk_clutter_init (&argc, &argv) != CLUTTER_INIT_SUCCESS)
     return 1;
@@ -388,7 +395,7 @@ main (int argc,
   gtk_container_set_border_width (GTK_CONTAINER (window), 10);
 
   /* give it the title */
-  gtk_window_set_title (GTK_WINDOW (window), "libchamplain Gtk+ demo");
+  gtk_window_set_title (GTK_WINDOW (window), "PerceptIN chassis mapview v0.1");
 
   /* Connect the destroy event of the window with our on_destroy function
    * When the window is about to be destroyed we get a notificaiton and
@@ -396,6 +403,8 @@ main (int argc,
    */
   g_signal_connect (G_OBJECT (window), "destroy", G_CALLBACK (on_destroy),
       NULL);
+
+  hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 10);
 
   vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 10);
 
@@ -510,8 +519,31 @@ main (int argc,
   adp = pi_chassis_adaptor_new();
   g_signal_connect(adp, "updated", G_CALLBACK (chassis_update), view);
 
+  gtk_container_add (GTK_CONTAINER (hbox), vbox);
+
+  /* Create the clutter widget: */
+  clutter_widget = gtk_clutter_embed_new ();
+  // viewport = gtk_frame_new (NULL);
+  // gtk_container_add (GTK_CONTAINER (viewport), clutter_widget);
+  gtk_container_add (GTK_CONTAINER (hbox), clutter_widget);
+
+  /* Set the size of the widget, 
+   * because we should not set the size of its stage when using GtkClutterEmbed.
+   */
+  gtk_widget_set_size_request (clutter_widget, 200, 200);
+
+  /* Get the stage and set its size and color: */
+  stage = gtk_clutter_embed_get_stage (GTK_CLUTTER_EMBED (clutter_widget));
+  clutter_stage_set_color (CLUTTER_STAGE (stage), &stage_color);
+
+  // Create a new label, using the Sans font 32 pixels high, and with the "Hello, world" text,
+  // and will place it into the stage.
+  label = clutter_text_new_full ("Sans 32px", "Hello, world", &actor_color);
+  clutter_container_add_actor (CLUTTER_CONTAINER (stage), label);
+  clutter_actor_set_position (label, 0, 0);  
+
   /* and insert it into the main window  */
-  gtk_container_add (GTK_CONTAINER (window), vbox);
+  gtk_container_add (GTK_CONTAINER (window), hbox);
 
   /* make sure that everything, window and label, are visible */
   gtk_widget_show_all (window);
