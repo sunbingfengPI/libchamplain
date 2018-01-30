@@ -35,6 +35,7 @@ chassis_pos pi_chassis_adaptor_get_pos (PIChassisAdaptor *self);
 gboolean pi_chassis_adaptor_get_path(PIChassisAdaptor *self, gps_2d **path, int *len);
 
 void pi_chassis_adaptor_set_target (PIChassisAdaptor *self, chassis_pos target);
+void pi_chassis_adaptor_cancel (PIChassisAdaptor *self);
 
 int pi_chassis_adaptor_subscribe(PIChassisAdaptor *self, const char *url);
 int pi_chassis_adaptor_unsubscribe(PIChassisAdaptor *self);

@@ -121,6 +121,30 @@ void pi_chassis_adaptor_set_target (PIChassisAdaptor *self, chassis_pos target)
   }
 }
 
+void pi_chassis_adaptor_cancel (PIChassisAdaptor *self)
+{
+  pi_system_command cmd;
+  uint8_t msg[sizeof (pi_system_command)];
+  int rc, retry = 3;
+
+  PIChassisAdaptorPrivate *priv = CHASSIS_ADAPTOR_GET_PRIVATE(self);
+  if(priv->connected)
+  {
+    // only allowed when connected.
+    cmd.type = PI_COMMAND_CANCEL;
+    // without body content, ignored.
+    
+    memcpy (msg, &cmd, sizeof (pi_system_command));
+    rc = nn_send (chassis_fd, msg, sizeof (msg), NN_DONTWAIT);   
+
+    while(rc == EAGAIN && retry-- > 0) 
+    {
+      usleep(1000);
+      rc = nn_send (chassis_fd, msg, sizeof (msg), NN_DONTWAIT); 
+    }
+  }
+}
+
 chassis_pos pi_chassis_adaptor_get_pos (PIChassisAdaptor *self)
 {
   PIChassisAdaptorPrivate *priv;

@@ -36,7 +36,8 @@ typedef struct pi_chassis_status_common_
 typedef enum pi_command_type_
 {
 	PI_COMMAND_NULL,
-	PI_COMMAND_SET_TARGET
+	PI_COMMAND_SET_TARGET,
+	PI_COMMAND_CANCEL
 }pi_command_type;
 
 typedef struct pi_system_command_

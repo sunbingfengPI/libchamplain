@@ -250,7 +250,7 @@ connect_ctrl (GtkWidget *widget,
       g_object_set_property(G_OBJECT (chassisURLentry), "editable", &val);
       // 
       // state change
-      gtk_button_set_label(widget, "unconnect");    
+      gtk_button_set_label(widget, "disconnect");    
     }
   }
   else
@@ -359,6 +359,13 @@ goto_target (GtkButton     *button,
   pi_chassis_adaptor_set_target(adp, pos);
 }
 
+static void
+cancel_goto_target (GtkButton     *button,
+             ChamplainView *view)
+{
+  // TODO
+}
+
 int
 main (int argc,
     char *argv[])
@@ -369,6 +376,7 @@ main (int argc,
   ChamplainMarkerLayer *layer;
   ClutterActor *scale;
   ChamplainLicense *license_actor;
+  GList *dash = NULL;
 
   if (gtk_clutter_init (&argc, &argv) != CLUTTER_INIT_SUCCESS)
     return 1;
@@ -424,6 +432,11 @@ main (int argc,
 
   path_layer = champlain_path_layer_new ();
   champlain_view_add_layer (view, CHAMPLAIN_LAYER (path_layer));  
+  champlain_path_layer_set_stroke_width(CHAMPLAIN_LAYER (path_layer), 3.0);
+  dash = g_list_append(dash, GUINT_TO_POINTER(6));
+  dash = g_list_append(dash, GUINT_TO_POINTER(2));
+  champlain_path_layer_set_dash (path_layer, dash);
+  g_list_free(dash);
 
   gtk_widget_set_size_request (widget, 640, 481);
 
@@ -442,11 +455,6 @@ main (int argc,
   g_signal_connect (button, "clicked", G_CALLBACK (zoom_out), view);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
-  button = gtk_toggle_button_new_with_label ("Markers");
-  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (button), TRUE);
-  g_signal_connect (button, "toggled", G_CALLBACK (toggle_layer), layer);
-  gtk_container_add (GTK_CONTAINER (bbox), button);
-
   entryBuffer = gtk_entry_buffer_new(NULL, -1);
   chassisURLentry = gtk_entry_new_with_buffer(entryBuffer);
   gtk_entry_set_text(chassisURLentry, "192.168.8.104");
@@ -459,9 +467,17 @@ main (int argc,
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
   button = gtk_button_new ();
-  image = gtk_image_new_from_icon_name ("go-last", GTK_ICON_SIZE_BUTTON);
+  image = gtk_image_new_from_icon_name ("go-jump", GTK_ICON_SIZE_BUTTON);
   gtk_button_set_image (GTK_BUTTON (button), image);
+  gtk_widget_set_tooltip_text(GTK_WIDGET (button), "go-to target");
   g_signal_connect (button, "clicked", G_CALLBACK (goto_target), view);
+  gtk_container_add (GTK_CONTAINER (bbox), button);
+
+  button = gtk_button_new ();
+  image = gtk_image_new_from_icon_name ("process-stop", GTK_ICON_SIZE_BUTTON);
+  gtk_button_set_image (GTK_BUTTON (button), image);
+  gtk_widget_set_tooltip_text(GTK_WIDGET (button), "cancel current run");
+  g_signal_connect (button, "clicked", G_CALLBACK (cancel_goto_target), view);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
   button = gtk_spin_button_new_with_range (0, 20, 1);
@@ -475,6 +491,7 @@ main (int argc,
   button = gtk_button_new ();
   image = gtk_image_new_from_icon_name ("camera-photo-symbolic", GTK_ICON_SIZE_BUTTON);
   gtk_button_set_image (GTK_BUTTON (button), image);
+  gtk_widget_set_tooltip_text(GTK_WIDGET (button), "capture current mapview");
   g_signal_connect (button, "clicked", G_CALLBACK (export_png), view);
   gtk_container_add (GTK_CONTAINER (bbox), button);
 
