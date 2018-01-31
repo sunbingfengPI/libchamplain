@@ -363,7 +363,7 @@ static void
 cancel_goto_target (GtkButton     *button,
              ChamplainView *view)
 {
-  pi_chassis_adaptor_cancel();
+  pi_chassis_adaptor_cancel(adp);
 }
 
 int
@@ -536,10 +536,17 @@ main (int argc,
   stage = gtk_clutter_embed_get_stage (GTK_CLUTTER_EMBED (clutter_widget));
   clutter_stage_set_color (CLUTTER_STAGE (stage), &stage_color);
 
+  /* Add a rectangle to the stage: */
+  ClutterActor *rect = clutter_rectangle_new_with_color (&actor_color);
+  clutter_actor_set_size (rect, 100, 100);
+  clutter_actor_set_position (rect, 20, 20);
+  clutter_actor_add_child (CLUTTER_CONTAINER (stage), rect);
+  // clutter_actor_show (rect);
+
   // Create a new label, using the Sans font 32 pixels high, and with the "Hello, world" text,
   // and will place it into the stage.
   label = clutter_text_new_full ("Sans 32px", "Hello, world", &actor_color);
-  clutter_container_add_actor (CLUTTER_CONTAINER (stage), label);
+  clutter_actor_add_child (CLUTTER_CONTAINER (stage), label);
   clutter_actor_set_position (label, 0, 0);  
 
   /* and insert it into the main window  */
