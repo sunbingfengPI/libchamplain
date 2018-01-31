@@ -366,23 +366,50 @@ cancel_goto_target (GtkButton     *button,
   pi_chassis_adaptor_cancel(adp);
 }
 
+static gboolean
+draw_callback (GtkWidget *widget, cairo_t *cr, gpointer data)
+{
+  guint width, height;
+  GdkRGBA color;
+  GtkStyleContext *context;
+
+  printf("custom draw callback...\n");
+  
+  context = gtk_widget_get_style_context (widget);
+
+  width = gtk_widget_get_allocated_width (widget);
+  height = gtk_widget_get_allocated_height (widget);
+
+  gtk_render_background (context, cr, 0, 0, width, height);
+
+  cairo_arc (cr,
+             width / 2.0, height / 2.0,
+             MIN (width, height) / 2.0,
+             0, 2 * G_PI);
+
+  gtk_style_context_get_color (context,
+                               gtk_style_context_get_state (context),
+                               &color);
+  gdk_cairo_set_source_rgba (cr, &color);
+
+  cairo_fill (cr);
+
+ return FALSE;
+}
+
 int
 main (int argc,
     char *argv[])
 {
   GtkWidget *window;
   GtkWidget *widget, *hbox, *vbox, *vbox_clutter, *bbox, *button, *entry, *viewport, *image;
-  GtkWidget *clutter_widget;
+  GtkWidget *custom_widget;
   ChamplainView *view;
   ChamplainMarkerLayer *layer;
   ClutterActor *scale;
   ChamplainLicense *license_actor;
   GList *dash = NULL;
 
-  ClutterColor stage_color = { 0x00, 0x00, 0x00, 0xff }; /* Black */
-  ClutterColor actor_color = { 0xff, 0xff, 0xff, 0x99 };
-  ClutterActor *stage;
-  ClutterActor *label;
   float x, y;
 
   if (gtk_clutter_init (&argc, &argv) != CLUTTER_INIT_SUCCESS)
@@ -521,33 +548,12 @@ main (int argc,
 
   gtk_container_add (GTK_CONTAINER (hbox), vbox);
 
-  /* Create the clutter widget: */
-  clutter_widget = gtk_clutter_embed_new ();
-  // viewport = gtk_frame_new (NULL);
-  // gtk_container_add (GTK_CONTAINER (viewport), clutter_widget);
-  gtk_container_add (GTK_CONTAINER (hbox), clutter_widget);
-
-  /* Set the size of the widget, 
-   * because we should not set the size of its stage when using GtkClutterEmbed.
-   */
-  gtk_widget_set_size_request (clutter_widget, 200, 200);
-
-  /* Get the stage and set its size and color: */
-  stage = gtk_clutter_embed_get_stage (GTK_CLUTTER_EMBED (clutter_widget));
-  clutter_stage_set_color (CLUTTER_STAGE (stage), &stage_color);
-
-  /* Add a rectangle to the stage: */
-  ClutterActor *rect = clutter_rectangle_new_with_color (&actor_color);
-  clutter_actor_set_size (rect, 100, 100);
-  clutter_actor_set_position (rect, 20, 20);
-  clutter_actor_add_child (CLUTTER_CONTAINER (stage), rect);
-  // clutter_actor_show (rect);
-
-  // Create a new label, using the Sans font 32 pixels high, and with the "Hello, world" text,
-  // and will place it into the stage.
-  label = clutter_text_new_full ("Sans 32px", "Hello, world", &actor_color);
-  clutter_actor_add_child (CLUTTER_CONTAINER (stage), label);
-  clutter_actor_set_position (label, 0, 0);  
+  // create a custom drawing area
+  custom_widget = gtk_drawing_area_new ();
+  gtk_widget_set_size_request (custom_widget, 200, 200);
+  gtk_container_add (GTK_CONTAINER (hbox), custom_widget);
+  g_signal_connect (G_OBJECT (custom_widget), "draw",
+                    G_CALLBACK (draw_callback), NULL);
 
   /* and insert it into the main window  */
   gtk_container_add (GTK_CONTAINER (window), hbox);
