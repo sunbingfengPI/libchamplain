@@ -363,7 +363,7 @@ static void
 cancel_goto_target (GtkButton     *button,
              ChamplainView *view)
 {
-  // TODO
+  pi_chassis_adaptor_cancel();
 }
 
 int

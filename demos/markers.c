@@ -112,7 +112,7 @@ create_marker_layer (G_GNUC_UNUSED ChamplainView *view, ChamplainPathLayer **pat
   champlain_label_set_draw_background (CHAMPLAIN_LABEL (current_marker), FALSE);
   champlain_location_set_location (CHAMPLAIN_LOCATION (current_marker), c_lat, c_lon);
   champlain_marker_layer_add_marker (layer, CHAMPLAIN_MARKER (current_marker));
-  champlain_path_layer_add_node (*path, CHAMPLAIN_LOCATION (current_marker));
+  // champlain_path_layer_add_node (*path, CHAMPLAIN_LOCATION (current_marker));
   champlain_marker_set_draggable(current_marker, FALSE);
 
   target_marker = champlain_label_new_from_file ("icons/target.png", &err);
@@ -126,7 +126,7 @@ create_marker_layer (G_GNUC_UNUSED ChamplainView *view, ChamplainPathLayer **pat
   champlain_label_set_draw_background (CHAMPLAIN_LABEL (target_marker), FALSE);
   champlain_location_set_location (CHAMPLAIN_LOCATION (target_marker), c_lat, c_lon + 0.00001);
   champlain_marker_layer_add_marker (layer, CHAMPLAIN_MARKER (target_marker));
-  champlain_path_layer_add_node (*path, CHAMPLAIN_LOCATION (target_marker));
+  // champlain_path_layer_add_node (*path, CHAMPLAIN_LOCATION (target_marker));
   champlain_marker_set_draggable(target_marker, TRUE);
 
   // custom handler
